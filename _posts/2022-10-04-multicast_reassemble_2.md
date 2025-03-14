@@ -138,7 +138,8 @@ eth1.20: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1466
 
 检查多mac地址的代码逻辑在__dev_set_rx_mode中。
 当dev->priv_flags没有设置 IFF_UNICAST_FLT时，会设置IFF_PROMISC标志。
-![在这里插入图片描述](https://i-blog.csdnimg.cn/blog_migrate/0a797fef8954e5ceb1b775b5c1df17c4.png)
+![image](https://github.com/user-attachments/assets/a49b9daf-f310-477f-9493-c3a6aa3313d4)
+
 
 至此，eth0和eth1为何IFF_PROMISC标志位设置的原因也找到了。
 
