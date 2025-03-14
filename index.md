@@ -1,6 +1,9 @@
 ---
 layout: home
 title: "我的博客"
+theme: jekyll-theme-cayman
+author: Jack Xing
+description: Analysis of Linux related issues.
 ---
 
 # 欢迎来到我的博客
