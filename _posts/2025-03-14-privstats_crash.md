@@ -55,7 +55,7 @@ crash> dis -r ip_route_input_rcu+507
 0xffffffff8091c463 <ip_route_input_rcu+35>:     xor    %r8d,%r8d
 0xffffffff8091c466 <ip_route_input_rcu+38>:     push   %rbx
 0xffffffff8091c467 <ip_route_input_rcu+39>:     mov    %rdi,%rbx	//rbx=rdi=skb=ffff888181b60500
-
+//省略部分
 0xffffffff8091c5fb <ip_route_input_rcu+443>:    mov    0x68(%rbx),%rax	//rax=_skb_refdst=0xffff888150ba6b0e
 0xffffffff8091c5ff <ip_route_input_rcu+447>:    mov    %rax,%rdi				//rdi=_skb_refdst
 0xffffffff8091c602 <ip_route_input_rcu+450>:    and    $0xfffffffffffffffe,%rdi			//rdi=dst
@@ -231,7 +231,7 @@ nf_ct_ext的offset， 明显有几个偏移值不正常， 目前长度是0x138�
 ```c
 crash> search 0xffff88817fca8e00      
 ffff888004208288: ffff88817fca8e00 
-
+//省略部分
 ffff888107c40188: ffff88817fca8e00 
 ffff888107c40988: ffff88817fca8e00 
 ffff888107ce7188: ffff88817fca8e00 
@@ -308,7 +308,8 @@ struct nf_conn_priv {
   info = {{
 
       stats = {0xffff88817fca8e00, 0x0}		//是priv_stats结构指针
-    }
+    }}
+}
 ```
 也就是说 0xffff88817fca8e00 既指向 nf_ct_ext，又指向 priv_stats。
 
