@@ -306,8 +306,8 @@ struct nf_ct_ext {
 crash> nf_conn_priv -x ffff888107c40168      
 struct nf_conn_priv {
   info = {{
-
-      stats = {0xffff88817fca8e00, 0x0}		//是priv_stats结构指针
+      flags = 3,
+      stats = {0xffff88817fca8e00, 0x0}
     }}
 }
 ```
