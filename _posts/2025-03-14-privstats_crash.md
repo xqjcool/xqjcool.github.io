@@ -513,7 +513,8 @@ struct kmem_cache_cpu {
 
 扩大怀疑范围，将这个期间所有申请和释放操作都列出来分析。发现存在一个skb_priv_save/skb_priv_restore进行了内存申请和释放。
 进一步 skb_priv_save/skb_priv_restore 操作的内存 和 nf_queue_entry一样都是在kmalloc-128 slab上申请内存。
-![对比内存content](https://i-blog.csdnimg.cn/direct/359720a2948f49f495f742a8187fd0c5.png)
+![image](https://github.com/user-attachments/assets/5557179e-2c04-4603-a665-d679a8cd295c)
+
 对比nf_queue_entry和skb_priv的内容，发现这块内存确实像是被skb_priv覆写了。也就是说0xffff88842621dc80这块内存，nf_queue_entry还在使用的过程中，又被skb_priv申请到，然后覆写了其中的一部分。
 
 从逻辑上看，nf_queue_entry 申请后 没有释放的操作， 却又被skb_priv_save 申请到， 只能有一种可能：kmalloc-128的freelist存在指向自己的loop。
