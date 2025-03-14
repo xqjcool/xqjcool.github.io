@@ -305,10 +305,10 @@ struct nf_ct_ext {
 
 crash> nf_conn_priv -x ffff888107c40168      
 struct nf_conn_priv {
-  info = {{
+  info = {
       flags = 3,
       stats = {0xffff88817fca8e00, 0x0}
-    }}
+    }
 }
 ```
 也就是说 0xffff88817fca8e00 既指向 nf_ct_ext，又指向 priv_stats。
