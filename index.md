@@ -1,7 +1,6 @@
 ---
-layout: home
+layout: default
 title: "我的博客"
-theme: jekyll-theme-cayman
 author: Jack Xing
 description: Analysis of Linux related issues.
 ---
