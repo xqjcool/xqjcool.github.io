@@ -102,6 +102,7 @@ struct skb_shared_info {
       page_offset = 807405872, 
       size = 808398895
     },
+  }
 //...
 }
 ```
