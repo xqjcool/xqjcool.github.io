@@ -89,7 +89,7 @@ struct skb_shared_info {
     counter = 1
   }, 
   destructor_arg = 0x945424f52502009, 
-  frags = {{
+  frags = {
       page = {
         p = 0xffffea000a19cbc0
       }, 
@@ -101,7 +101,7 @@ struct skb_shared_info {
       }, 
       page_offset = 807405872, 
       size = 808398895
-    }}
+    }
 //...
 }
 ```
