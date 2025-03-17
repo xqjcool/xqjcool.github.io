@@ -2,7 +2,7 @@
 title: "[Memory Leak] Memory Leak Caused by pppd Program"
 date: 2020-11-26
 ---
-线上设备出现了内存泄漏，查看相关信息，发现是隐性内存占用过高导致。查阅<内存泄漏定位思路和方法>，没有找到问题原因。
+线上设备出现了内存泄漏，查看相关信息，发现是隐性内存占用过高导致。查阅[内存泄漏定位思路和方法](https://xqjcool.github.io/2020/03/27/methods_for_memory_leak.html)，没有找到问题原因。
 
 查看线上内存历史统计，发现内存上涨很有规律，大概6天上涨到100%。然后因为内存不足，触发oom，杀掉工作进程后，内存可以下降下来。
 ![image](https://github.com/user-attachments/assets/692c5a37-9459-4db0-8399-341282217085)
