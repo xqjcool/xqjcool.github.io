@@ -1,0 +1,20 @@
+---
+layout: default
+---
+
+<main id="content" class="main-content" role="main">
+  <article>
+    <h1>{{ page.title }}</h1>
+    <p><small>发表于 {{ page.date | date: "%Y-%m-%d" }}</small></p>
+
+    {{ content }}
+
+    <!-- 📊 页面访问次数统计 -->
+    <p style="text-align: right; font-size: 0.9em; color: gray; margin-top: 2em;">
+      本文访问次数：<span id="busuanzi_value_page_pv">...</span> 次
+    </p>
+  </article>
+
+  <!-- 🚀 引入 Busuanzi 统计脚本 -->
+  <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+</main>
