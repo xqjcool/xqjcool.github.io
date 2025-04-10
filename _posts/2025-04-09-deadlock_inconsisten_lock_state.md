@@ -96,12 +96,12 @@ Apr  9 16:20:26 kern.warn kernel: [   65.637712]  </IRQ>
 
 ## 日志解析
 
-### `inconsistent {SOFTIRQ-ON-W} -> {IN-SOFTIRQ-W} usage.`
+### inconsistent {SOFTIRQ-ON-W} -> {IN-SOFTIRQ-W} usage.
 - 左边 {SOFTIRQ-ON-W}：表示当前获取锁的代码是在 softirq 开启的上下文中，并且以写模式加锁（W）；
 - 右边 {IN-SOFTIRQ-W}：表示当前上下文其实是 处于 SoftIRQ（软中断）中，并且也是以 写模式加锁
 错误就在于，锁在“非软中断上下文中打开软中断状态”时被加锁，但同一个锁又在 SoftIRQ 上下文中被加锁，可能产生死锁。
 
-### `swapper/1/0 [HC0[0]:SC1[1]:HE1:SE0] takes:`
+### swapper/1/0 [HC0[0]:SC1[1]:HE1:SE0] takes:
 表示当前锁是在 `swapper/1/`（即 CPU1 的 idle 进程）中上锁的。
 此时的Lockdep 中断状态
 
@@ -116,12 +116,12 @@ Apr  9 16:20:26 kern.warn kernel: [   65.637712]  </IRQ>
 当前 CPU（CPU1）正在执行 swapper idle task，正处于软中断上下文中（SoftIRQ count = 1），硬中断是启用的，软中断是禁用的。
 
 
-### `ffff88810d520018 (&net->ipv4.fib_statistics->lock){+.?.}-{2:2}, at: net_event_callback+0x373/0x490`
+### ffff88810d520018 (&net->ipv4.fib_statistics->lock){+.?.}-{2:2}, at: net_event_callback+0x373/0x490
 
 
 在 net_event_callback 函数中，地址为 ffff88810d520018 的锁（即 net->ipv4.fib_statistics->lock）被加锁了，此时它已经处于加锁状态 {+.?.}，而它属于 Lockdep 的第 2 类锁，当前嵌套层数为 2（-{2:2}）。这个锁的使用可能引起不一致（尤其是和 SoftIRQ 的上下文切换有关）。
 
-### `{SOFTIRQ-ON-W} state was registered at:`
+### {SOFTIRQ-ON-W} state was registered at:
 
 这是进程上下文上锁的调用栈，可以看到是netlink收报处理过程中调用`fib_stat_rcv_proc`，对 `et->ipv4.fib_statistics->lock` 进行了加锁。
 
