@@ -116,7 +116,7 @@ Apr 25 15:16:50 kern.info kernel: [160127.921731] [hook_nf_hook_slow:213]: 172.1
 ```c
 #define APACHE_CUSTOM_PORT 9
 if (ntohs(th->dest) == cur->custom_port) {
-				th->dest = htons(APACHE_CUSTOM_PORT);
+	th->dest = htons(APACHE_CUSTOM_PORT);
 }
 ```
 
@@ -141,3 +141,98 @@ crash> dis xxxx_nat_get_port
 0xffffffffa0428916 <xxxx_nat_get_port+38>: test   %rcx,%rcx
 
 ```
+
+通过反汇编找到hlist_head数组的地址 0xffffffffa042b000
+
+```bash
+crash> rd 0xffffffffa042b000 512
+ffffffffa042b000:  0000000000000000 0000000000000000   ................
+//省略空白
+ffffffffa042b900:  ffff888884161290 0000000000000000   ................
+//省略空白
+ffffffffa042bc10:  ffff888884161710 0000000000000000   ................
+//省略空白
+```
+
+查看对应结构
+
+```bash
+crash> xxxx_nat_node_t -x ffff888884161200
+struct xxxx_nat_node_t {
+  ip = 0x5a2b150a,
+  custom_port = 0x0,
+  nproto = 0x4,
+  proto = {
+      protocol = 0x6,
+      port = 0x1bb,
+      action = 0x1,
+      type = 0x4
+    }, {
+      protocol = 0x1,
+      port = 0x0,
+      action = 0x1,
+      type = 0x1
+    }, {
+      protocol = 0x6,
+      port = 0x16,
+      action = 0x1,
+      type = 0x2
+    }, {
+      protocol = 0x6,
+      port = 0x50,
+      action = 0x1,
+      type = 0x3
+    }, 
+	//省略无关
+}
+
+crash> xxxx_nat_node_t -x FFFF888884161680
+struct xxx_nat_node_t {
+  ip = 0x5a2b150a,
+  custom_port = 0x16,	//端口22 问题出在这里
+  nproto = 0x4,
+  proto = {
+      protocol = 0x6,
+      port = 0x1bb,
+      action = 0x1,
+      type = 0x4	//4
+    }, {
+      protocol = 0x1,
+      port = 0x0,
+      action = 0x1,
+      type = 0x1	//1
+    }, {
+      protocol = 0x6,
+      port = 0x16,
+      action = 0x1,
+      type = 0x2	//2
+    }, {
+      protocol = 0x6,
+      port = 0x50,
+      action = 0x1,
+      type = 0x3	//3
+    },
+//省略无关
+}
+```
+
+确实有node的 custom_port = 0x16,导致目的端口被改为9。
+
+查看代码，只有当type 等于 XXXX_TYPE_CUSTOM = 19 时，才会设置 custom_port. 而proto中没有type为19的。也就是没有触发custom_port的赋值。
+
+```c
+new = kmalloc(sizeof(xxxx_nat_node_t), GFP_ATOMIC);
+//省略无关
+if (inf->proto[i].type == XXXX_TYPE_CUSTOM) {
+	new->custom_port = inf->proto[i].port;
+}
+```
+
+那么custom_port的值就是申请时内存中的残留值，这是个不可预测的。只是刚好这次是 22。导致了本次的问题。
+
+
+解决的方法很简单，将 kmalloc ==> kzalloc就行了。
+
+## 后记
+埋下一个bug很容易，定位一个bug却是耗尽精力。
+同志们，变量和结构的初始化一定要切记啊！！！
