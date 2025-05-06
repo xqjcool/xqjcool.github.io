@@ -3,7 +3,7 @@ title: "[CRASH] Kernel panic - not syncing: Fatal machine check"
 date: 2025-05-01
 ---
 
-# [CRASH] Kernel panic - not syncing: Fatal machine check"
+# [CRASH] 内核崩溃 - 正在停止同步：致命的机器检查错误"
 
 客户上报设备异常重启，查看发现是出现硬件错误。第一次遇到这种情况，特此记录。
 
@@ -150,5 +150,11 @@ PID: 0        TASK: ffff889038ec44c0  CPU: 3    COMMAND: "swapper/3"
 #15 [ffffc900000ebf18] cpu_startup_entry at ffffffff8028aed0
 #16 [ffffc900000ebf30] start_secondary at ffffffff80235a44
 #17 [ffffc900000ebf50] secondary_startup_64 at ffffffff802000d5
+
+```
+
+## 相关信息解读
+
+```bash
 
 ```
