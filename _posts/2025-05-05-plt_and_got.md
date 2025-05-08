@@ -8,7 +8,7 @@ date: 2025-05-05
 在linux进程调试中，经常会看到你所调用的函数多了一个@plt的后缀，例如printf@plt, puts@plt等等。相信你当时一定有些疑问，plt是什么？ printf@plt与printf有什么关系？...
 下面让我们慢慢揭开他们的面纱。
 
-## 认识PLT
+## 1. 认识PLT
 为了帮助我们更好的理解，我们理论实践相结合。边调试边学习。
 
 ### 示例程序
@@ -56,7 +56,7 @@ End of assembler dump.
 
 从示例中，我们看到了printf@plt， 那么为什么要用printf@plt, 而不是直接用printf呢？ 此时就引出了PLT的概念。
 
-## PLT(Procedure Linkage Table)
+## 2. PLT(Procedure Linkage Table)
 
 ### 什么是PLT
 
@@ -92,7 +92,7 @@ Dump of assembler code for function printf@plt:
 
 这时你的脑中又会多出一个疑问：这个`printf@got.plt`又是什么？ 要说清这个，我们先了解下GOT。
 
-## GOT(Global Offset Table)
+## 3. GOT(Global Offset Table)
 
 ### 什么是GOT
 
@@ -116,3 +116,81 @@ got.plt表保存的是所有通过PLT调用的外部函数的间接跳转地址�
 
 - 普通 got 段是给全局变量、静态数据用的。
 - got.plt 段是专门给PLT函数调用用的。
+
+## 4. 继续调试
+
+回到 `printf@plt`的反汇编代码，逐步解读。
+
+```bash
+   0x0000555555555030 <+0>:     jmp    *0x2fca(%rip)        # 0x555555558000 <printf@got.plt>
+   0x0000555555555036 <+6>:     push   $0x0
+   0x000055555555503b <+11>:    jmp    0x555555555020
+```
+
+### jmp    *0x2fca(%rip)
+
+0x2fca(%rip) 也就是 0x555555558000， 去这个地址中找到指令的地址，跳转执行。
+
+```bash
+gdb) x/gx 0x555555558000
+0x555555558000 <printf@got.plt>:        0x0000555555555036	//其实就是printf@plt的第二条指令的地址
+```
+
+也就是说实际上 `printf@plt`的第一条jmp指令，跳转到 `printf@plt`的第二条指令。是不是有点多此一举？不要着急，很快你就会明白的。
+
+### push   $0x0
+
+这条指令将printf的符号索引压入栈中。每个需要重定位的的符号都会在 rela.plt表中有个entry。0 表示 printf在rela.plt表中的索引为0。
+
+```bash
+# readelf -r ./test
+
+Relocation section '.rela.dyn' at offset 0x540 contains 8 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+000000003dd0  000000000008 R_X86_64_RELATIVE                    1130
+000000003dd8  000000000008 R_X86_64_RELATIVE                    10f0
+000000004010  000000000008 R_X86_64_RELATIVE                    4010
+000000003fc0  000100000006 R_X86_64_GLOB_DAT 0000000000000000 __libc_start_main@GLIBC_2.34 + 0
+000000003fc8  000200000006 R_X86_64_GLOB_DAT 0000000000000000 _ITM_deregisterTM[...] + 0
+000000003fd0  000400000006 R_X86_64_GLOB_DAT 0000000000000000 __gmon_start__ + 0
+000000003fd8  000500000006 R_X86_64_GLOB_DAT 0000000000000000 _ITM_registerTMCl[...] + 0
+000000003fe0  000600000006 R_X86_64_GLOB_DAT 0000000000000000 __cxa_finalize@GLIBC_2.2.5 + 0
+
+Relocation section '.rela.plt' at offset 0x600 contains 1 entry:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+000000004000  000300000007 R_X86_64_JUMP_SLO 0000000000000000 printf@GLIBC_2.2.5 + 0
+```
+
+- 这个entry的Offset保存了 printf@got.plt地址。 这里的0x4000是原始地址，需要加上程序基地址0x555555554000。
+
+0x555555554000 + 0x4000 = 0x555555558000 正好就是 
+
+```bash
+(gdb) info address printf@got.plt
+Symbol "printf@got.plt" is at 0x555555558000 in a file compiled without debugging.
+
+(gdb) info proc mappings
+process 14245
+Mapped address spaces:
+
+          Start Addr           End Addr       Size     Offset  Perms  objfile
+      0x555555554000     0x555555555000     0x1000        0x0  r--p   /var/log/gui_upload/test	//基地址
+      0x555555555000     0x555555556000     0x1000     0x1000  r-xp   /var/log/gui_upload/test
+```
+
+- 这个entry的 Sym. Name + Addend 保存了 符号的字符串名称， 后续在so中找。
+
+也就是说后续要在 libc.so中查找 printf@GLIBC_2.2.5 对应符号的地址。
+
+### jmp    0x555555555020
+
+这一步是跳转0x555555555020后继续执行指令。
+
+```bash
+(gdb) x/3i 0x555555555020
+   0x555555555020:      push   0x2fca(%rip)        # 0x555555557ff0	//link_map
+   0x555555555026:      jmp    *0x2fcc(%rip)        # 0x555555557ff8
+   0x55555555502c:      nopl   0x0(%rax)
+```
+
+这里第一条指令是 将 line_map 压入栈中。
