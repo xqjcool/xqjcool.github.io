@@ -166,10 +166,18 @@ Relocation section '.rela.plt' at offset 0x600 contains 1 entry:
 0x555555554000 + 0x4000 = 0x555555558000 正好就是 
 
 ```bash
+//查看printf@got.plt地址
 (gdb) info address printf@got.plt
 Symbol "printf@got.plt" is at 0x555555558000 in a file compiled without debugging.
 
-(gdb) info proc mappings
+//通过link_map获取基地址，也就是可执行文件中符号地址与内存中符号地址的差异量
+(gdb) x/gx 0x555555557ff0
+0x555555557ff0:	0x00007ffff7ffe2e0	//link_map地址
+(gdb) x/gx 0x00007ffff7ffe2e0
+0x7ffff7ffe2e0:	0x0000555555554000	//link_map.l_addr就是基地址
+
+//通过进程映射获取基地址
+(gdb) info proc mappings	//这里可以看到
 process 14245
 Mapped address spaces:
 
@@ -188,9 +196,67 @@ Mapped address spaces:
 
 ```bash
 (gdb) x/3i 0x555555555020
-   0x555555555020:      push   0x2fca(%rip)        # 0x555555557ff0	//link_map
+   0x555555555020:      push   0x2fca(%rip)        # 0x555555557ff0	//0x555555557ff0 中存放了link_map的地址
    0x555555555026:      jmp    *0x2fcc(%rip)        # 0x555555557ff8
    0x55555555502c:      nopl   0x0(%rax)
 ```
 
-这里第一条指令是 将 line_map 压入栈中。
+这里第一条指令是 将 line_map地址 压入栈中。然后跳转到 0x555555557ff8中存放的指令地址去执行。
+
+```bash
+(gdb) x/gx 0x555555557ff0
+0x555555557ff0:	0x00007ffff7ffe2e0	//link_map地址
+
+(gdb) x/gx 0x555555557ff8
+0x555555557ff8:	0x00007ffff7fdf720	//跳转指令地址
+(gdb) x/64i 0x00007ffff7fdf720	//实际上是<_dl_runtime_resolve_fxsave>
+   0x7ffff7fdf720:	push   %rbx
+   0x7ffff7fdf721:	mov    %rsp,%rbx
+   0x7ffff7fdf724:	and    $0xffffffffffffffc0,%rsp
+   0x7ffff7fdf728:	sub    0x1d561(%rip),%rsp        # 0x7ffff7ffcc90 <_rtld_global_ro+464>
+   0x7ffff7fdf72f:	mov    %rax,(%rsp)
+   0x7ffff7fdf733:	mov    %rcx,0x8(%rsp)
+   0x7ffff7fdf738:	mov    %rdx,0x10(%rsp)
+   0x7ffff7fdf73d:	mov    %rsi,0x18(%rsp)
+   0x7ffff7fdf742:	mov    %rdi,0x20(%rsp)
+   0x7ffff7fdf747:	mov    %r8,0x28(%rsp)
+   0x7ffff7fdf74c:	mov    %r9,0x30(%rsp)
+   0x7ffff7fdf751:	mov    $0xee,%eax
+   0x7ffff7fdf756:	xor    %edx,%edx
+   0x7ffff7fdf758:	mov    %rdx,0x240(%rsp)
+   0x7ffff7fdf760:	mov    %rdx,0x248(%rsp)
+   0x7ffff7fdf768:	mov    %rdx,0x250(%rsp)
+   0x7ffff7fdf770:	mov    %rdx,0x258(%rsp)
+   0x7ffff7fdf778:	mov    %rdx,0x260(%rsp)
+   0x7ffff7fdf780:	mov    %rdx,0x268(%rsp)
+   0x7ffff7fdf788:	mov    %rdx,0x270(%rsp)
+   0x7ffff7fdf790:	mov    %rdx,0x278(%rsp)
+   0x7ffff7fdf798:	xsave  0x40(%rsp)
+   0x7ffff7fdf79d:	mov    0x10(%rbx),%rsi	//printf的符号索引 0
+   0x7ffff7fdf7a1:	mov    0x8(%rbx),%rdi	//link_map地址 0x00007ffff7ffe2e0
+   0x7ffff7fdf7a5:	call   0x7ffff7fddad6	//<_dl_fixup>
+   0x7ffff7fdf7aa:	mov    %rax,%r11	//返回printf的真正地址，保存的r11寄存器
+   0x7ffff7fdf7ad:	mov    $0xee,%eax
+   0x7ffff7fdf7b2:	xor    %edx,%edx
+   0x7ffff7fdf7b4:	xrstor 0x40(%rsp)
+   0x7ffff7fdf7b9:	mov    0x30(%rsp),%r9
+   0x7ffff7fdf7be:	mov    0x28(%rsp),%r8
+   0x7ffff7fdf7c3:	mov    0x20(%rsp),%rdi
+   0x7ffff7fdf7c8:	mov    0x18(%rsp),%rsi
+   0x7ffff7fdf7cd:	mov    0x10(%rsp),%rdx
+   0x7ffff7fdf7d2:	mov    0x8(%rsp),%rcx
+   0x7ffff7fdf7d7:	mov    (%rsp),%rax
+   0x7ffff7fdf7db:	mov    %rbx,%rsp
+   0x7ffff7fdf7de:	mov    (%rsp),%rbx
+   0x7ffff7fdf7e2:	add    $0x18,%rsp
+   0x7ffff7fdf7e6:	jmp    *%r11		//跳转到printf去执行
+
+```
+
+_dl_fixup 就不再展开了，简而言之， 它通过 符号索引和link_map，找到对应的rela.plt(见上面), 从而得到最终需要写入的 printf@got.plt地址， 然后通过 printf@GLIBC_2.2.5 字串，遍历link_map，找到对应符号的真实地址。最后写入到 printf@got.plt中。再跳转到真正的printf地址去执行。
+
+这里有两个关键点：
+
+- 将真正printf的符号地址 写入 printf@got.plt， 供后续使用
+- 跳转 printf的符号地址，继续本次调用的执行。
+
