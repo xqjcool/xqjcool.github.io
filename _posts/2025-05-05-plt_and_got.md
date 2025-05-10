@@ -260,3 +260,90 @@ _dl_fixup 就不再展开了，简而言之， 它通过 符号索引和link_map
 - 将真正printf的符号地址 写入 printf@got.plt， 供后续使用
 - 跳转 printf的符号地址，继续本次调用的执行。
 
+### 更新后的printf@got.plt
+
+我们在main退出前设置断点， 观察printf第一次调用后的变化。
+
+```bash
+(gdb) b *0x0000555555555164
+Breakpoint 2 at 0x555555555164: file test.c, line 9.
+(gdb) continue
+Continuing.
+[/var/log/test] plt test
+
+Breakpoint 2, main (argc=1, argv=0x7fffffffed88) at test.c:9
+9	in test.c
+
+(gdb) disass 0x555555555030
+Dump of assembler code for function printf@plt:
+   0x0000555555555030 <+0>:	jmp    *0x2fca(%rip)        # 0x555555558000 <printf@got.plt>
+   0x0000555555555036 <+6>:	push   $0x0
+   0x000055555555503b <+11>:	jmp    0x555555555020
+End of assembler dump.
+(gdb) x/gx 0x555555558000
+0x555555558000 <printf@got.plt>:	0x00007ffff7e809ef	//此时已经更新成printf的真正地址了，后续直接jmp到printf执行。
+(gdb) info address printf
+Symbol "printf" is at 0x7ffff7e809ef in a file compiled without debugging.
+
+```
+
+对比 printf@got.plt中的内容
+
+- 调用前： 0x0000555555555036 ，printf@plt的第二条压栈质量，后续调用_dl_runtime_resolve_fxsave 去解析并保存符号真正地址。
+- 调用后： 0x00007ffff7e809ef ，printf的真正地址，再次调用printf@plt时，直接jmp到printf去执行。
+
+## 5. 初次调用和后续执行路径
+
+下面是初次调用和后续执行路径的示意图。
+可见PLT的核心在于 printf@got.plt 这个地址，而其他代码都没有改变。
+这个地址默认保存 printf@plt的下一条指令，最终去解析和保存真正的符号地址。
+一旦保存后，这里的jmp就直接跳转到真正的符号地址去执行。
+
+```text
++---------------------+
+| 调用 printf()       |
++---------------------+
+           |
+           v
++------------------------------+
+| printf@plt (PLT entry)       |
+| jmp *printf@got.plt          |
++------------------------------+
+                          |
+                          v
+                     (是否已绑定？)
+                      /        \
+                     / 否       \ 是
+                    /            \
+                   v              v
++-------------------------+      +------------------------+
+| printf@got.plt 指向：    |      | printf@got.plt 指向：   |
+| _dl_runtime_resolve     |      | 真正的printf地址        |
++-------------------------+      +------------------------+
+           |                                |
+           v                                |
++-------------------------------+           |
+| _dl_runtime_resolve[_rxsave]  |           |
+| - 保存寄存器状态                |           |
+| - call _dl_fixup              |           |
++-------------------------------+           |
+           |                                |
+           v                                |
++--------------------------+                |
+| _dl_fixup                |                |
+| - 找printf符号            |                |
+| - 确定真实地址             |                |
+| - 写入GOT[printf]         |                |
++--------------------------+                |
+           |                                |
+           v                                |
++---------------------------+               |
+| 返回 printf 的真实地址      |               |
++---------------------------+               |
+           |                                |
+           v                                |
++-----------+        +------------+         |
+| jmp *%r11 |------> | 执行printf  | <-------+
++-----------+        +------------+
+
+```
