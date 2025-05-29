@@ -379,6 +379,7 @@ static struct ip_set_type hash_ipport_type __read_mostly = {
 		[IPSET_ATTR_SKBMARK]	= { .type = NLA_U64 },
 		[IPSET_ATTR_SKBPRIO]	= { .type = NLA_U32 },
 		[IPSET_ATTR_SKBQUEUE]	= { .type = NLA_U16 },
++		[IPSET_ATTR_PRIVATE1]	= { .type = NLA_U32 },	//新增type=12对应的policy后OK
 	},
 	.me		= THIS_MODULE,
 };
