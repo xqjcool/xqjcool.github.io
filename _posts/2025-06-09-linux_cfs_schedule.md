@@ -177,4 +177,36 @@ b. 中断处理返回用户态时
 
 ### 3.3 CFS调度逻辑
 
+![Untitled Diagram drawio](https://github.com/user-attachments/assets/d9d96fda-5252-47cb-9f07-dd91f0661131)
+
+这是个简化后的CFS调度框架。我们基于它来理清CFS调度的基础逻辑。
+
+#### 3.3.1 结构梳理
+
+在多核系统中，每个cpu都有一个调度队列结构 rq，它包含了 CFS调度队列cfs。cfs是CFS调度队列结构，我们目前只关注优化后的红黑树结构tasks_timeline和当前运行实体*curr 。
+
+tasks_timeline 结构包含了一个 rb_root红黑树，还有一个rb_leftmode指针，它指向红黑树中最左侧的节点，也就是vruntime最小的节点。这样做的优点就是实现了O(1)操作，不用去红黑树中遍历查找。
+
+#### 3.3.2 调度方式
+
+- schedule 主动调度(通常设置TASK_INTERRUPTIBLE/TASK_UNINTERRUPTIBLE)
+
+进程等待资源(I/O,锁等)或condition不满足时，调用schedule()让出CPU。
+
+- cond_resched 主动检查调度(不改变任务状态)
+
+条件：抢占计数器是否为0，是否设置了重新调度标志 TIF_NEED_RESCHED 
+在不可抢占系统中，为了避免任务执行时间过长，导致其他任务starve。显式请求调度，如果需要，则安全地让出CPU；如果不需要，则什么都不做，进程继续运行。
+
+- 系统调用/异常返回/中断返回(隐式调用schedule)
+
+都是在返回用户态前，对重新调度标志 TIF_NEED_RESCHED 进行检查，如果设置了，则会进入schedule(),
+
+#### 3.3.3 时间片耗尽
+
+系统每个tick运行一次tick_sched_timer，它会调用
+
+
+
+
 
