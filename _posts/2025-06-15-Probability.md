@@ -105,3 +105,20 @@ $$
 $$
 = \sum_{i=0}^n \binom{n}{i} x^i y^{n - i}
 $$
+
+
+- 记号
+
+如果 $$n_1 + n_2 + \cdots + n_r = n$$，则定义
+
+$$
+\binom{n}{n_1, n_2, \dots, n_r} = \frac{n!}{n_1! \, n_2! \cdots n_r!}
+$$
+
+因此， $$\binom{n}{n_1, n_2, \dots, n_r}$$ 表示把 $$n$$ 个不同的元素分成大小分别为 $$n_1, n_2, \dots, n_r$$ 的 $$r$$ 个不同组的组合数。
+
+#### 多项式定理
+
+$$(x_1 + x_2 + \cdots + x_r)^n = \sum_{\substack{(n_1, \dots, n_r) \\ n_1 + \cdots + n_r = n}} \binom{n}{n_1, n_2, \dots, n_r} x_1^{n_1} x_2^{n_2} \cdots x_r^{n_r}$$
+
+上述的求和号是对满足 $$n_1 + n_2 + \cdots + n_r = n$$ 的所有非负整数向量 $$(n_1, n_2, \dots, n_r)$$ 求和。
