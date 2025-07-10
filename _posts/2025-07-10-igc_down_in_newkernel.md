@@ -266,6 +266,8 @@ struct ethtool_link_ksettings {
 ```
 
 从内核中get到的link_mode_data
+
+```
 [0x000020ef][0x00008000][0x00000000][0x000020ef][0x00008000][0x00000000]
 \------------- support ------------/\------------- advertise ----------/
 
@@ -276,6 +278,7 @@ struct ethtool_link_ksettings {
                   |                         ^
                   |-------- 1->3 -----------|
 \------------- support ------------/\------------- advertise ----------/
+```
 
 导致advertise中的代表 10baseT/Half 10baseT/Full 100baseT/Half 100baseT/Full 1000baseT/Full 的bit全被覆盖。
 从而导致了问题发生。
