@@ -255,4 +255,44 @@ struct ethtool_link_ksettings {
 ```
 
 在 autoneg == AUTONEG_ENABLE 是做了一个hardcode操作， 默认link_mode_data只占 2个 __u32，也就是8个字节。这在linux 4.14.x中是正确的，但是在linux 6.1.x, 是16个字节。
-这时 `memcpy(&ecmd.link_mode_data[2],&ecmd.link_mode_data[0],4 * 2)` 操作就会将
+这时 `memcpy(&ecmd.link_mode_data[2],&ecmd.link_mode_data[0],4 * 2)` 操作就会将 advertise前4个字节覆盖成support的中间4个字节。
+
+从debug日志中可以看到：
+
+```bash
+[   32.945768] [igc_ethtool_get_link_ksettings:1854] proc:cmdbsvr advertis:af autoneg:af sup:8000000020ef adv:8000000020ef lpad:0
+
+[   32.945770] [igc_ethtool_set_link_ksettings:1868] proc:cmdbsvr advertis:af autoneg:af sup:8000000020ef adv:800000008000 lpad:0
+```
+
+从内核中get到的link_mode_data
+[0x000020ef][0x00008000][0x00000000][0x000020ef][0x00008000][0x00000000]
+\------------- support ------------/\------------- advertise ----------/
+
+执行错误的memcpy后
+    |-------- 0->2 -----------|
+    |                         V
+[0x000020ef][0x00008000][0x000020ef][0x00008000][0x00008000][0x00000000]
+                  |                         ^
+                  |-------- 1->3 -----------|
+\------------- support ------------/\------------- advertise ----------/
+
+导致advertise中的代表 10baseT/Half 10baseT/Full 100baseT/Half 100baseT/Full 1000baseT/Full 的bit全被覆盖。
+从而导致了问题发生。
+
+## 5. 问题修复
+
+问题原因找到了，修复就容易多了。将hardcode部分改为实际link_mode_masks_nwords。
+
+```c
+{
+	int nwords = ecmd.req.link_mode_masks_nwords;
+	memcpy(&ecmd.link_mode_data[nwords],
+		&ecmd.link_mode_data[0],
+		4 * nwords);
+}
+```
+
+## 6. 后记
+
+hardcode害人不浅，还是尽量避免。
