@@ -120,6 +120,84 @@ __setup("nofsgsbase", x86_nofsgsbase_setup);
 公司还有B产品，内核和该产品相同，且同样有Hyper-V虚拟机，但是没听说QA上报Hyper-V虚拟机启动异常问题。
 联系B产品QA，提供了一台Hyper-V虚拟机，登陆后确实工作正常。
 
-为了对比差异，在宿主机是手动创建了B产品的Hyper-V虚拟机， 结果同样出现了启动后crash问题。
+为了对比差异，在问题宿主机上手动创建了B产品的Hyper-V虚拟机， 结果同样出现了启动后crash问题。
+于是怀疑问题宿主机有问题，对fsgsbase的指令支持异常。
 
+为了确认猜想，在B产品的测试宿主机上创建了A产品的Hyper-V虚拟机，结果运行正常。
+也就是说同样的A产品image，在问题宿主机上无法启动，在B产品的宿主机上就能正常运行。
 
+### 3.3 对比两台宿主机CPU差异
+
+- 先是在问题宿主机上，部署一台升级内核前的Hyper-V虚拟机，因为旧内核没有支持fsgsbase指令，所以正常运行。
+查看虚拟机CPU：
+
+```bash
+/var/log# cat /proc/cpuinfo 
+processor	: 0
+vendor_id	: AuthenticAMD
+cpu family	: 23
+model		: 1
+model name	: AMD EPYC 7281 16-Core Processor
+stepping	: 2
+microcode	: 0xffffffff
+cpu MHz		: 2099.995
+cache size	: 512 KB
+physical id	: 0
+siblings	: 2
+core id		: 0
+cpu cores	: 2
+apicid		: 0
+initial apicid	: 0
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 13
+wp		: yes
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt lm rep_good nopl cpuid extd_apicid pni pclmulqdq ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ssbd vmmcall fsgsbase bmi1 avx2 smep bmi2 xsaveopt arat
+bugs		: fxsave_leak sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass
+bogomips	: 4199.99
+TLB size	: 2560 4K pages
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 42 bits physical, 48 bits virtual
+power management:
+```
+
+是 `AMD EPYC 7281 16-Core Processor` 且支持 fsgsbase指令集
+
+- 随后在可以正常运行的新内核Hyper-V虚拟机上查看
+
+```bash
+/var/log# cat /proc/cpuinfo 
+processor	: 0
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 63
+model name	: Intel(R) Xeon(R) CPU E5-2620 v3 @ 2.40GHz
+stepping	: 2
+microcode	: 0xffffffff
+cpu MHz		: 2399.978
+cache size	: 15360 KB
+physical id	: 0
+siblings	: 1
+core id		: 0
+cpu cores	: 1
+apicid		: 0
+initial apicid	: 0
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 13
+wp		: yes
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology cpuid pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt xsave avx f16c rdrand hypervisor lahf_lm abm invpcid_single ibrs ibpb stibp fsgsbase bmi1 avx2 smep bmi2 erms invpcid xsaveopt arch_capabilities
+bugs		: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit mmio_stale_data retbleed
+bogomips	: 4799.95
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 43 bits physical, 48 bits virtual
+power management:
+```
+
+是 `Intel(R) Xeon(R) CPU E5-2620 v3 @ 2.40GHz` 同样也支持 fsgsbase指令集。
+
+## 4. 问题宿主机
+
+最终问题出在这个有问题的宿主机，它明明支持fsgsbase指令集，但是运行时却又invalid opcode。
