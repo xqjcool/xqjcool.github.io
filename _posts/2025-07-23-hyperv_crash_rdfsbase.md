@@ -198,6 +198,17 @@ power management:
 
 是 `Intel(R) Xeon(R) CPU E5-2620 v3 @ 2.40GHz` 同样也支持 fsgsbase指令集。
 
-## 4. 问题宿主机
+## 4. 如何修正问题宿主机
 
 最终问题出在这个有问题的宿主机，它明明支持fsgsbase指令集，但是运行时却又invalid opcode。
+如果解决这种问题？经过研究，我们可以在创建虚拟机时，把处理器Processor的兼容性compatibility选项选中。
+
+<img width="724" height="258" alt="image" src="https://github.com/user-attachments/assets/b6a07e22-e77e-4baf-8238-f8623124364d" />
+
+打开后，经测试，Hyper-V虚拟机可以正常启动。查看发现CPU特性不再支持fsgsbase。
+<img width="324" height="179" alt="image" src="https://github.com/user-attachments/assets/b8c5edc2-a8b3-4316-a878-699b85841d7a" />
+
+## 5. 后记
+
+[FSGSBASE Instructions](https://docs.oracle.com/cd/E37838_01/html/E61064/gnydr.html)
+[Accessing FS/GS base with the FSGSBASE instructions]([https://www.kernel.org/doc/html/next/x86/x86_64/fsgs.html](https://www.kernel.org/doc/html/next/x86/x86_64/fsgs.html#accessing-fs-gs-base-with-the-fsgsbase-instructions))
