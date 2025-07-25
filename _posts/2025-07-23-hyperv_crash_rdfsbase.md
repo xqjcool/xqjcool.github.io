@@ -212,4 +212,5 @@ power management:
 ## 5. 后记
 
 [FSGSBASE Instructions](https://docs.oracle.com/cd/E37838_01/html/E61064/gnydr.html)
-[Accessing FS/GS base with the FSGSBASE instructions]([https://www.kernel.org/doc/html/next/x86/x86_64/fsgs.html](https://www.kernel.org/doc/html/next/x86/x86_64/fsgs.html#accessing-fs-gs-base-with-the-fsgsbase-instructions))
+
+[Accessing FS/GS base with the FSGSBASE instructions](https://www.kernel.org/doc/html/next/x86/x86_64/fsgs.html#accessing-fs-gs-base-with-the-fsgsbase-instructions)
