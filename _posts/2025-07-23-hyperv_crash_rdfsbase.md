@@ -205,7 +205,7 @@ power management:
 
 <img width="724" height="258" alt="image" src="https://github.com/user-attachments/assets/b6a07e22-e77e-4baf-8238-f8623124364d" />
 
-打开后，经测试，Hyper-V虚拟机可以正常启动。查看发现CPU特性不再支持fsgsbase。
+打开后，经测试，Hyper-V虚拟机可以正常启动。查看发现CPU特性不再支持fsgsbase, 推测AMD这款CPU在对fsgsbase的兼容性上存在问题。
 
 <img width="324" height="179" alt="image" src="https://github.com/user-attachments/assets/b8c5edc2-a8b3-4316-a878-699b85841d7a" />
 
