@@ -141,4 +141,27 @@ if "bug" in review.lower() or "issue" in review.lower():
 随便找一段代码，故意在其中添加几行错误代码，然后提交。
 观察是否能够给出AI review结果。
 
+```bash
+$ git commit
 
+===== AI Review Summary =====
+1. Possible bugs or logic flaws:
+   - The line `pr_info("skb->dev:%s\n", skb->dev->name);` is a potential null pointer dereference. `skb` is not initialized before this line, so it could be null, causing a crash when trying to access `skb->dev->name`.
+
+2. Code quality or best practice issues:
+   - The logging statement `pr_info("skb->dev:%s\n", skb->dev->name);` is not very descriptive. It would be better to provide more context in the log message.
+   - There is inconsistent spacing around the if statement `if(inet->combo)`. It would be better to have a space after the `if` for readability and consistency with the rest of the code.
+
+3. Suggestions for improvement:
+   - Move the logging statement `pr_info("skb->dev:%s\n", skb->dev->name);` to after the `skb` is initialized by `skb = skb_recv_datagram(sk, flags, &err);`.
+   - Add a null check for `skb->dev` before trying to access `skb->dev->name` to prevent potential null pointer dereference.
+   - Improve the log message to provide more context about what is being logged.
+   - Add a space after the `if` in `if(inet->combo)` to improve readability and consistency.
+=============================
+
+⚠️  Potential issues detected. Please review before pushing.
+❌ Commit aborted due to AI review feedback.
+
+```
+
+看起来还不错，给出错误原因，也给出最优实践，还给出改进建议。
