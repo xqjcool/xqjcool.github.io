@@ -25,7 +25,19 @@ date: 2025-07-25
 
 <img width="838" height="621" alt="image" src="https://github.com/user-attachments/assets/2cd2b4a4-f155-472a-ba92-35075c9e4521" />
 
-### 1.2 
+### 1.2 充值账户
+
+因为openai API key是预付费，按token收费，所以我们要先给账户充值。
+
+打开链接 https://platform.openai.com/settings/organization/billing/overview ，可以看到你的余额。
+
+<img width="384" height="257" alt="image" src="https://github.com/user-attachments/assets/872d5fa8-0e33-44b2-beff-94d0677e1eee" />
+
+然后选择充值 `Add to credit balance`
+
+<img width="224" height="173" alt="image" src="https://github.com/user-attachments/assets/56b26410-c1a7-46e4-8b4b-99c69d3cd603" />
+
+最低充值$5， 我们添加信用卡账户，确认后充值成功。
 
 ## 2. 安装依赖
 
