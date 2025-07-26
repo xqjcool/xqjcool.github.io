@@ -14,7 +14,7 @@ date: 2025-07-25
 
 ### 1.1 创建 API key
 
-打开链接 (https://platform.openai.com/account/api-keys) ，登录你的OpenAPI账户。
+打开链接 [platform.openai.com/account/api-keys](https://platform.openai.com/account/api-keys) ，登录你的OpenAPI账户。
 点击`Create new secret key`，输入`Name`,点击创建即可。
 
 <img width="229" height="245" alt="image" src="https://github.com/user-attachments/assets/f0be43e8-05eb-4b7e-8ea2-eb99499e2c60" />
@@ -29,7 +29,7 @@ date: 2025-07-25
 
 因为openai API key是预付费，按token收费，所以我们要先给账户充值。
 
-打开链接 (https://platform.openai.com/settings/organization/billing/overview) ，可以看到你的余额。
+打开链接 [platform.openai.com/settings/organization/billing/overview](https://platform.openai.com/settings/organization/billing/overview) ，可以看到你的余额。
 
 <img width="384" height="257" alt="image" src="https://github.com/user-attachments/assets/872d5fa8-0e33-44b2-beff-94d0677e1eee" />
 
