@@ -371,4 +371,54 @@ void nf_ct_destroy(struct nf_conntrack *nfct)
 
 ```
 
-## 6. 问题场景
+## 6. 问题修复
+
+将expectation的remove操作挪到 tmpl nf_conn的释放之前即可。
+
+```c
+ net/netfilter/nf_conntrack_core.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+index 344f88295976..7f6b95404907 100644
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -577,6 +577,13 @@ void nf_ct_destroy(struct nf_conntrack *nfct)
+ 
+ 	WARN_ON(refcount_read(&nfct->use) != 0);
+ 
++	/* Expectations will have been removed in clean_from_lists,
++	 * except TFTP can create an expectation on the first packet,
++	 * before connection is in the list, so we need to clean here,
++	 * too.
++	 */
++	nf_ct_remove_expectations(ct);
++
+ 	if (unlikely(nf_ct_is_template(ct))) {
+ 		nf_ct_tmpl_free(ct);
+ 		return;
+@@ -585,13 +592,6 @@ void nf_ct_destroy(struct nf_conntrack *nfct)
+ 	if (unlikely(nf_ct_protonum(ct) == IPPROTO_GRE))
+ 		destroy_gre_conntrack(ct);
+ 
+-	/* Expectations will have been removed in clean_from_lists,
+-	 * except TFTP can create an expectation on the first packet,
+-	 * before connection is in the list, so we need to clean here,
+-	 * too.
+-	 */
+-	nf_ct_remove_expectations(ct);
+-
+ 	if (ct->master)
+ 		nf_ct_put(ct->master);
+ 
+
+base-commit: 01792bc3e5bdafa171dd83c7073f00e7de93a653
+```
+
+编译image，并交给QA复现验证，没有再出现crash现象。
+
+查看最新的linux code发现这个问题同样存在，于是提交了一个patch。
+
+([PATCH] netfilter: conntrack: drop expectations before freeing templates)[https://lore.kernel.org/all/20250819181718.2130606-1-xqjcool@gmail.com/]
+
+希望能够被批准 :-)
