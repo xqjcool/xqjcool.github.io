@@ -8,7 +8,7 @@ date: 2025-08-15
 ## 1. 问题现象
 
 QA那边上报了一个系统crash问题，据说复现概率挺高，每次都crash在同样位置。
-于是查看crash log，发现是expectaion的timer超市处理中， nf_ct_unlink_expect_report 执行时，发生空地址引用导致crash。
+于是查看crash log，发现是expectaion的timer超时处理中， nf_ct_unlink_expect_report 执行时，发生空地址引用导致crash。
 
 ## 2. 初步分析
 
