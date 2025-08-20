@@ -419,6 +419,6 @@ base-commit: 01792bc3e5bdafa171dd83c7073f00e7de93a653
 
 查看最新的linux code发现这个问题同样存在，于是提交了一个patch。
 
-([PATCH] netfilter: conntrack: drop expectations before freeing templates)[https://lore.kernel.org/all/20250819181718.2130606-1-xqjcool@gmail.com/]
+[[PATCH] netfilter: conntrack: drop expectations before freeing templates](https://lore.kernel.org/all/20250819181718.2130606-1-xqjcool@gmail.com/)
 
 希望能够被批准 :-)
