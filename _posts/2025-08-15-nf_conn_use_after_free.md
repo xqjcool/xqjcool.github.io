@@ -371,9 +371,41 @@ void nf_ct_destroy(struct nf_conntrack *nfct)
 
 ```
 
-## 6. 问题修复
+## 6. 深入分析
 
-将expectation的remove操作挪到 tmpl nf_conn的释放之前即可。
+一个skb的nf_conn是template nf_conntrack，这不合理。
+正常来说，template nf_conntrack在 nf_conntrack_in 处理时，会将其替换成真正的 nf_conntrack。
+
+```c
+unsigned int
+nf_conntrack_in(struct sk_buff *skb, const struct nf_hook_state *state)
+{
+//省略无关
+	tmpl = nf_ct_get(skb, &ctinfo);
+	if (tmpl || ctinfo == IP_CT_UNTRACKED) {
+		/* Previously seen (loopback or untracked)?  Ignore. */
+		if ((tmpl && !nf_ct_is_template(tmpl)) ||
+		     ctinfo == IP_CT_UNTRACKED)
+			return NF_ACCEPT;
+		skb->_nfct = 0;				//template nf_conntrack 则 置空_nfct
+	}
+//省略无关
+	ret = resolve_normal_ct(tmpl, skb, dataoff,
+				protonum, state);
+}
+```
+
+在nf_conntrack_in中，如果skb->_nfct是 template conntrack，则置空 skb->_nfct。随后调用 resolve_normal_ct() --> init_conntrack() --> __nf_conntrack_alloc() --> ct = kmem_cache_alloc(nf_conntrack_cachep, gfp) 申请正式的nf_conntrack。并 调用 nf_ct_set() 赋予 skb->_nfct
+
+也就是说nf_conntrack_in 处理后，skb->_nfct 不可能是template nf_conntrack了。
+
+但是为什么测试环境会出现呢？ 又看了一遍nf_conntrack_in 的代码，发现里面有个提前跳出逻辑。愿意是为了提高性能，不再进行 nf_conntrack 处理。但是有点粗暴，导致template conntrack没有清理，最终导致了问题发生。
+
+## 7. 问题修复
+
+### 修复方案1
+
+最初想的是将expectation的remove操作挪到 tmpl nf_conn的释放之前即可。这样即使expectation的master是template conntrack也能正确释放。
 
 ```c
  net/netfilter/nf_conntrack_core.c | 14 +++++++-------
@@ -415,10 +447,39 @@ index 344f88295976..7f6b95404907 100644
 base-commit: 01792bc3e5bdafa171dd83c7073f00e7de93a653
 ```
 
-编译image，并交给QA复现验证，没有再出现crash现象。
+### 修复方案2
 
-查看最新的linux code发现这个问题同样存在，于是提交了一个patch。
+经过更深的了解产品代码和nf_conntrack的整体逻辑后。将处理前置是更好的办法，这样能避免很多不必要的操作。类似expectaion的创建和删除。
 
-[[PATCH] netfilter: conntrack: drop expectations before freeing templates](https://lore.kernel.org/all/20250819181718.2130606-1-xqjcool@gmail.com/)
+只需要将 提前跳出逻辑放到 template conntrack的判断之后。
 
-希望能够被批准 :-)
+```c
+unsigned int
+nf_conntrack_in(struct sk_buff *skb, const struct nf_hook_state *state)
+{
+//省略无关
+	tmpl = nf_ct_get(skb, &ctinfo);
+	if (tmpl || ctinfo == IP_CT_UNTRACKED) {
+		/* Previously seen (loopback or untracked)?  Ignore. */
+		if ((tmpl && !nf_ct_is_template(tmpl)) ||
+		     ctinfo == IP_CT_UNTRACKED)
+			return NF_ACCEPT;
+		skb->_nfct = 0;				//template nf_conntrack 则 置空_nfct
+	}
+//提前跳出逻辑
+	if (SPECIAL_CONDITION)
+		return ACCEPT；
+
+}
+```
+
+出image，测试验证通过。
+
+## 8. 后记
+
+在软件工程中，有个名词叫“前置”，意思是达到同样的效果，处理越靠前，越高效，越能降低成本。
+
+例如本例中的处理。 方案1也能达到同样效果，但是在此之前，系统为数据包创建了无效的expectaion，添加了定时器，最终又将其删除。这一系列操作都是不必要的，浪费了CPU时间片。
+方案2在最开始就直接将skb->_nfct置空，也就没有后续的无效操作。更简洁高效。
+
+类似的还有测试， 如果问题在单元测试发现，比在集成测试发现成本要低。在集成测试发现，比在客户环境发现成本更低。
