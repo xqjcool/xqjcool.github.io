@@ -111,4 +111,10 @@ struct page {
 
 ### 3.1 alloc_pages
 
+alloc_pages申请内存的基本执行路径如下(快速路径)：
+
+```c
+alloc_pages --> __alloc_pages --> get_page_from_freelist --> rmqueue --> rmqueue_buddy --> __rmqueue --> __rmqueue_smallest --> get_page_from_free_area
+```
+
 
