@@ -246,4 +246,86 @@ struct page *get_page_from_free_area(struct free_area *area,
 }
 ```
 
+### 3.2 free_pages
+
+free_pages 释放内存的基本执行路径如下：
+
+```c
+free_pages --> __free_pages --> free_the_page --> __free_pages_ok --> __free_one_page
+```
+
+
+__free_one_page 函数主要做两件事。
+1. 查找空闲buddy page，如果找到则合并成一个order更大的page，再继续向上查找。
+2. 设置page的order，添加到对应的空闲链表中。
+
+```c
+/*
+ * 用于 buddy 系统分配器的释放函数。
+ *
+ * buddy 系统的概念是为各种“order”（阶）大小的内存块维护一个直接映射表
+ * （包含位值）。最低级别的表包含最小可分配单位（此处为页面）的映射，
+ * 每个更高级别描述的是其下一级中两个单元的配对，因此被称为“伙伴（buddy）”系统。
+ *
+ * 从高层来看，这里的操作就是将最低层的表项标记为可用，并在必要时向上传播
+ * 这种状态变更，同时执行一些需要配合虚拟内存系统其它部分的统计工作。
+ *
+ * 在每个阶（order）中，我们维护一个页面链表，该链表的元素是一段连续空闲页面
+ * 的起始页（长度为 1 << order），这些页面通过 PageBuddy 标记。
+ * 页面所属的阶数记录在 page_private(page) 字段中。
+ * 因此，在进行分配或释放操作时，可以推导出其对应 buddy 页面的状态。
+ * 也就是说，如果我们分配了一个较小的块，而两个伙伴页都空闲，
+ * 那么剩余区域必须被拆分为多个更小的块。
+ * 如果释放一个块，并且它的 buddy 也是空闲的，那么这将触发合并操作，
+ * 以构成一个更大的块。
+ *
+ * -- nyc
+ */
+void __free_one_page(struct page *page,	unsigned long pfn, struct zone *zone, unsigned int order, int migratetype, fpi_t fpi_flags)
+{
+//部分省略
+	while (order < MAX_ORDER - 1) {
+//部分省略
+
+		buddy = find_buddy_page_pfn(page, pfn, order, &buddy_pfn);	//查找buddy page
+		if (!buddy)
+			goto done_merging;
+
+//部分省略
+
+		/*
+		 * Our buddy is free or it is CONFIG_DEBUG_PAGEALLOC guard page,
+		 * merge with it and move up one order.
+		 */
+		if (page_is_guard(buddy))
+			clear_page_guard(zone, buddy, order, migratetype);
+		else
+			del_page_from_free_list(buddy, zone, order);	//buddy page从当前list 移除
+		combined_pfn = buddy_pfn & pfn;
+		page = page + (combined_pfn - pfn);		//新的page
+		pfn = combined_pfn;						//新的pfn
+		order++;								//新的order
+	}
+
+done_merging:
+	set_buddy_order(page, order);		//设置page order
+
+	if (fpi_flags & FPI_TO_TAIL)
+		to_tail = true;
+	else if (is_shuffle_order(order))
+		to_tail = shuffle_pick_tail();
+	else
+		to_tail = buddy_merge_likely(pfn, buddy_pfn, page, order);
+
+	if (to_tail)
+		add_to_free_list_tail(page, zone, order, migratetype);	//添加到新list tail
+	else
+		add_to_free_list(page, zone, order, migratetype);		//或 添加到新list
+
+	/* Notify page reporting subsystem of freed page */
+	if (!(fpi_flags & FPI_SKIP_REPORT_NOTIFY))
+		page_reporting_notify_free(order);
+}
+
+```
 
