@@ -135,3 +135,129 @@ refcnt=19-12 =7
 ```
 
 经过筛选和汇总，发现 fib_info相关对 vlan1 引用了 23次，但是释放了17次，有6个引用没有释放！！！
+
+## 3. fib为什么没有释放
+
+问题缩小到 fib持有的refcnt没有释放。但是那些fib持有vlan1的refcnt没有释放呢？
+
+因为索引fib_info都挂在fib_info_hash链表数组中。我们读取链表数组，看看那些fib_info中持有了vlan1的索引。
+
+```bash
+crash> fib_info_hash
+fib_info_hash = $2 = (struct hlist_head *) 0xffff8881448c2c00
+crash> fib_info_hash_size
+fib_info_hash_size = $3 = 64
+crash> rd 0xffff8881448c2c00 64
+ffff8881448c2c00:  0000000000000000 0000000000000000   ................
+//部分忽略
+ffff8881448c2cc0:  0000000000000000 ffff88810211f400   ................
+ffff8881448c2cd0:  0000000000000000 0000000000000000   ................
+ffff8881448c2ce0:  0000000000000000 0000000000000000   ................
+ffff8881448c2cf0:  0000000000000000 0000000000000000   ................
+ffff8881448c2d00:  ffff888100af8c00 0000000000000000   ................
+ffff8881448c2d10:  0000000000000000 ffff888100af8400   ................
+ffff8881448c2d20:  ffff888100afbc00 0000000000000000   ................
+ffff8881448c2d30:  0000000000000000 ffff888100af6400   .........d......
+ffff8881448c2d40:  0000000000000000 0000000000000000   ................
+ffff8881448c2d50:  0000000000000000 0000000000000000   ................
+ffff8881448c2d60:  0000000000000000 0000000000000000   ................
+ffff8881448c2d70:  ffff88813ef2a200 0000000000000000   ...>............      //
+ffff8881448c2d80:  0000000000000000 0000000000000000   ................
+ffff8881448c2d90:  0000000000000000 0000000000000000   ................
+ffff8881448c2da0:  0000000000000000 0000000000000000   ................
+ffff8881448c2db0:  0000000000000000 ffff888142a8f800   ...........B....
+ffff8881448c2dc0:  0000000000000000 0000000000000000   ................
+ffff8881448c2dd0:  0000000000000000 0000000000000000   ................
+ffff8881448c2de0:  0000000000000000 0000000000000000   ................
+ffff8881448c2df0:  ffff888102a98400 0000000000000000   ................
+
+//依次查看，最后发现
+crash> list ffff88813ef2a200
+ffff88813ef2a200
+ffff88813ef2a800
+ffff888145767a00
+ffff888145767200
+ffff888143de1400
+ffff888143de1200
+
+//依次查看 nhc_dev
+crash> fib_info.fib_nh ffff88813ef2a200
+  fib_nh = 0xffff88813ef2a2b0
+crash> fib_nh.nh_common -x 0xffff88813ef2a2b0
+  nh_common = {
+    nhc_dev = 0xffff888102af8000,      //vlan1设备
+    nhc_dev_tracker = {<No data fields>},
+    nhc_oif = 0x16,
+    nhc_flags = 0x11,
+    nhc_scope = 0xfd,
+    nhc_family = 0x2,
+    nhc_gw_family = 0x2,
+    nhc_lwtstate = 0x0,
+    nhc_gw = {
+      ipv4 = 0x4901020a,      //10.2.1.73
+    },
+//部分省略
+  }
+```
+
+在 ffff88813ef2a200 这个链上找到6个持有 vlan1 索引的fib_info, 和 问题中 有6个 refcnt未释放 对应。
+
+这些fib_info是什么时候创建的呢？
+
+```bash
+crash> fib_info ffff88813ef2a200             
+struct fib_info {
+//部分省略
+  fib_treeref = {
+    refs = {
+      counter = 1
+    }
+  },
+  fib_clntref = {
+    refs = {
+      counter = 1
+    }
+  },
+
+  fib_tb_id = 4097,
+  fib_priority = 0,
+//部分省略
+}
+```
+
+从fib_info中我们得知它的 route table id是 4097。 查看设备运行时的路由表 4097
+
+```bash
+/var/log/debug_sys# ip route show table 4097
+default proto static 
+	nexthop via 10.2.1.71 dev vlan1 weight 1 
+	nexthop via 10.2.1.72 dev vlan1 weight 1 
+	nexthop via 10.2.1.73 dev vlan1 weight 1 
+```
+
+难道是这个表在升级时没有清理导致么？
+
+## 4. 猜想 + 验证
+
+### 4.1 删除4097表中路由项
+
+删除4097表中的 10.2.1.72 和 10.2.1.73 对应的路由项，然后升级image失败，有coredump产生。 查看coredump， 问题fib_info依然存在。
+但是重启后，再次升级就OK了。
+
+也就是说直接删除 路由项，并不能将异常 fib_info清理干净。但是启动时如果没有 路由项，问题fib_info就不会产生，也就没有问题了。
+
+现在问题缩小到， 创建 10.2.1.72 和 10.2.1.73 对应的路由项时，会产生 问题fib_info，但是删除时，并不会清理这些问题fib_info。
+
+### 4.2 fib_table_insert和fib_table_delete 添加详细日志
+
+明明创建时和删除时有对应的ib_table_insert和fib_table_delete操作，为什么fib_info没有释放？
+为了追踪fib_info信息，在创建时对 fib_table，fib_alias, fib_info等地址进行跟踪。用来观察问题fib_info的创建和释放。
+验证发现创建时产生的fib_info并没有挂到fib_alias上。
+
+随后增加日志，验证发现 问题fib_info 在一个表merge操作后，没有再使用，但是没释放。产生了孤儿fib_info。
+
+
+## 5. 修复
+
+找到原因后，修复就水到渠成。添加对应的release操作即可。
+
