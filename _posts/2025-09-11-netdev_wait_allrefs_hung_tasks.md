@@ -255,9 +255,81 @@ default proto static
 验证发现创建时产生的fib_info并没有挂到fib_alias上。
 
 随后增加日志，验证发现 问题fib_info 在一个表merge操作后，没有再使用，但是没释放。产生了孤儿fib_info。
-
-
-## 5. 修复
-
 找到原因后，修复就水到渠成。添加对应的release操作即可。
 
+## 5. 复盘和思考
+
+虽然描述中轻描淡写，但实际上费了很大功夫。所以想着能不能有一些好的办法，帮助尽快定位问题。在分析时注意到内核有 CONFIG_NET_DEV_REFCNT_TRACKER 选项。
+
+它的定义在 "net/Kconfig.debug"
+
+```bash
+# SPDX-License-Identifier: GPL-2.0-only
+
+config NET_DEV_REFCNT_TRACKER
+        bool "Enable net device refcount tracking"
+        depends on DEBUG_KERNEL && STACKTRACE_SUPPORT && NET
+        select REF_TRACKER
+        default n
+        help
+          Enable debugging feature to track device references.
+          This adds memory and cpu costs.
+
+config NET_NS_REFCNT_TRACKER
+        bool "Enable networking namespace refcount tracking"
+        depends on DEBUG_KERNEL && STACKTRACE_SUPPORT && NET
+        select REF_TRACKER
+        default n
+        help
+          Enable debugging feature to track netns references.
+          This adds memory and cpu costs.
+
+config DEBUG_NET
+        bool "Add generic networking debug"
+        depends on DEBUG_KERNEL && NET
+        help
+          Enable extra sanity checks in networking.
+          This is mostly used by fuzzers, but is safe to select.
+```
+
+为了测试这个选项是否好用，我特地编译了一版 打开 "CONFIG_NET_DEV_REFCNT_TRACKER=y" 的image，加载复现后。
+
+查看core日志，发现有如下记录：
+
+```bash
+[  386.186291] unregister_netdevice: waiting for vlan1 to become free. Usage count = 3
+[  386.186478] leaked reference.
+[  386.186538]  fib_create_info+0x655/0xaa0
+[  386.186548]  fib_table_insert+0xa7/0xa00
+[  386.186553]  inet_rtm_newroute+0x8d/0xe0
+[  386.186557]  rtnetlink_rcv_msg+0x2f4/0x5e0
+[  386.186562]  netlink_rcv_skb+0xc1/0x170
+[  386.186568]  rtnetlink_rcv+0x15/0x20
+[  386.186571]  netlink_unicast+0x257/0x550
+[  386.186576]  netlink_sendmsg+0x3c2/0x5c0
+[  386.186581]  ____sys_sendmsg+0x28f/0x2e0
+[  386.186586]  __sys_sendmsg+0x2a8/0x300
+[  386.186590]  __x64_sys_sendmsg+0x1c/0x30
+[  386.186594]  do_syscall_64+0x49/0xa0
+[  386.186602]  entry_SYSCALL_64_after_hwframe+0x64/0xce
+
+[  386.186608] leaked reference.
+[  386.186666]  fib_create_info+0x655/0xaa0
+[  386.186670]  fib_table_insert+0xa7/0xa00
+[  386.186675]  inet_rtm_newroute+0x8d/0xe0
+[  386.186678]  rtnetlink_rcv_msg+0x2f4/0x5e0
+[  386.186682]  netlink_rcv_skb+0xc1/0x170
+[  386.186686]  rtnetlink_rcv+0x15/0x20
+[  386.186690]  netlink_unicast+0x257/0x550
+[  386.186694]  netlink_sendmsg+0x3c2/0x5c0
+[  386.186699]  ____sys_sendmsg+0x28f/0x2e0
+[  386.186703]  __sys_sendmsg+0x2a8/0x300
+[  386.186707]  __x64_sys_sendmsg+0x1c/0x30
+[  386.186711]  do_syscall_64+0x49/0xa0
+[  386.186717]  entry_SYSCALL_64_after_hwframe+0x64/0xce
+
+
+```
+
+直接将问题定位到是fib_info部分， 可以说是相当精确。 如果早开启这个选项，我就不用在前面费那么多功夫了。
+这个选项，5星推荐！！！
