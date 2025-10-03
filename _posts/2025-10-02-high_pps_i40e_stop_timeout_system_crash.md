@@ -326,5 +326,15 @@ static int i40e_pf_rxq_wait(struct i40e_pf *pf, int pf_q, bool enable)
 }
 ```
 
+这个错误log表示 接收DMA队列关闭失败，即DMA仍在工作。随后的操作会释放DMA内存。
 
+```bash
+i40e_down --> i40e_vsi_stop_rings --> i40e_vsi_control_rx --> i40e_control_rx_q	//停止DMA队列
+          |--> i40e_clean_rx_ring --> 						//释放DMA内存
+```
 
+这样会造成 DMA队列还在工作，但是DMA内存可能已经被其他地方申请使用了。
+
+## 4. 解决方案
+
+### 4.1 方案1
