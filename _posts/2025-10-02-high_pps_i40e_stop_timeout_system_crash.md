@@ -338,3 +338,132 @@ i40e_down --> i40e_vsi_stop_rings --> i40e_vsi_control_rx --> i40e_control_rx_q	
 ## 4. 解决方案
 
 ### 4.1 方案1
+
+为了防止这个问题发生，可以开启IOMMU。要确认CPU支持VT-d。
+
+- BIOS中启用VT-d。(有的默认开启，有的需要手动开启)
+- .config中打开  `CONFIG_INTEL_IOMMU=y`
+- 启动命令中 `intel_iommu=on`
+
+我们产品BIOS中显示已支持VT-d，但是没有开关选项，所以不确认是否开启。
+编译image后，发现 dmar_tbl获取不到。
+
+```c
+int __init detect_intel_iommu(void)
+{
+	int ret;
+	struct dmar_res_callback validate_drhd_cb = {
+		.cb[ACPI_DMAR_TYPE_HARDWARE_UNIT] = &dmar_validate_one_drhd,
+		.ignore_unhandled = true,
+	};
+
+	down_write(&dmar_global_lock);
+	ret = dmar_table_detect();		//获取dmar_tbl
+	if (!ret)
+		ret = dmar_walk_dmar_table((struct acpi_table_dmar *)dmar_tbl,
+					   &validate_drhd_cb);
+	if (!ret && !no_iommu && !iommu_detected && !dmar_disabled) {
+		iommu_detected = 1;
+		/* Make sure ACS will be enabled */
+		pci_request_acs();
+	}
+
+#ifdef CONFIG_X86
+	if (!ret)
+		x86_init.iommu.iommu_init = intel_iommu_init;
+#endif
+
+	if (dmar_tbl) {
+		acpi_put_table(dmar_tbl);
+		dmar_tbl = NULL;
+	}
+	up_write(&dmar_global_lock);
+
+	return ret ? ret : 1;
+}
+
+/**
+ * dmar_table_detect - checks to see if the platform supports DMAR devices
+ */
+static int __init dmar_table_detect(void)
+{
+	acpi_status status = AE_OK;
+
+	/* if we could find DMAR table, then there are DMAR devices */
+	status = acpi_get_table(ACPI_SIG_DMAR, 0, &dmar_tbl);	//失败，dmar_tbl地址为0
+
+	if (ACPI_SUCCESS(status) && !dmar_tbl) {
+		pr_warn("Unable to map DMAR\n");
+		status = AE_NOT_FOUND;
+	}
+
+	return ACPI_SUCCESS(status) ? 0 : -ENOENT;
+}
+```
+
+已就该问题向intel发邮件请求分析。
+
+
+### 4.2 方案2
+
+因为时间急， 所以转而寻找第二方案。
+于是决定增加查询rx队列状态的等待时间。
+
+```c
+#define I40E_QUEUE_WAIT_RETRY_LIMIT	100000	//默认10，该到了100000
+static int i40e_pf_rxq_wait(struct i40e_pf *pf, int pf_q, bool enable)
+{
+	int i;
+	u32 rx_reg;
+
+	for (i = 0; i < I40E_QUEUE_WAIT_RETRY_LIMIT; i++) {
+		rx_reg = rd32(&pf->hw, I40E_QRX_ENA(pf_q));
+		if (enable == !!(rx_reg & I40E_QRX_ENA_QENA_STAT_MASK))
+			break;
+
+		usleep_range(10, 20);
+	}
+	if (i >= I40E_QUEUE_WAIT_RETRY_LIMIT)
+		return -ETIMEDOUT;
+
+	return 0;
+}
+
+```
+
+将I40E_QUEUE_WAIT_RETRY_LIMIT改为100000后，最大等待时间 
+
+经验证，问题不再出现，log显示最长循环约50000次，等待在1s左右。
+
+这样虽然没有方案1优雅，但短时间也只能选择这个方案。
+
+### 4.3 方案3
+
+因为觉得方案2有点不优雅。想从触发问题的诱因出发，看看有什么办法修复。
+
+追溯进程信息，发现调用链条
+
+1:init --> 2093:smit --> 2094:cmdbsvr --> 2301:sh --> 2302:dev_bind_irq --> 2815:ifconfig
+
+```bash
+crash> ps
+//部分省略
+        1       0   2  ffffa15a93660000  IN   0.0    19560     8632  init
+     2093       1   6  ffffa15a42ebf000  IN   0.0    20776    11564  smit
+     2094    2093   4  ffffa15a42f7d400  IN   0.1    82292    34452  cmdbsvr
+     2301    2094   6  ffffa15a928ff000  IN   0.0    16464     7900  sh
+     2302    2301   2  ffffa15a9273d400  IN   0.0    16464     7884  dev_bind_irq
+>    2815    2302   5  ffffa15a928af000  RU   0.0    16464     7616  ifconfig
+
+```
+
+经查看 dev_bind_irq是一个脚本，用来优化 网卡设备的中断绑定的。它在这个阶段会对网卡执行up/down并调整中断绑定。
+也就是这个up/down导致了问题的发生。
+
+经分析，i40e的中断收发队列是默认每个cpu一个，很均匀。并不需要在这优化。
+时间紧急为了最小化影响，就只将i40e的dev_bind_irq操作取消。
+
+经测试问题不在出现。版本即将发布，这个workaround能保证在不引入潜在新问题的情况下，修复这个crash问题。
+
+## 5. 后记
+待和intel确认dmar_tbl问题后，还是会使用更优雅的方案1。
