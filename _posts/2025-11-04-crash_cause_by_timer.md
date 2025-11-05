@@ -242,7 +242,7 @@ Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552863] ---[ end trace 0000000000000
 
 ```
 
-从以上Call Trace可以看到，问题timer是 dos_vs_log_expire.
+从以上Call Trace可以看到，问题timer是 ddos_log_expire.
 
 随后查看对应代码，梳理 dos_vs_log_expire 的相关使用逻辑，发现存在 timer还在队列中，但是相关内存结构被释放的问题。
 
