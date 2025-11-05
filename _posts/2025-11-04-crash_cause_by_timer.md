@@ -190,11 +190,66 @@ ffffea000402a6c0 100a9b000        200000000        0  0 8000000000000000
 ```
 
 .config文件添加以上CONFIG选项，重新编译image，在问题设备上进行复现。
+再次复现后，查看日志
+
+```bash
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552402] ------------[ cut here ]------------
+Nov  4 13:59:19 VM kern.err kernel: [ 1369.552407] ODEBUG: free active (active state 0) object type: timer_list hint: ddos_log_expire+0x0/0x500
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552672] WARNING: CPU: 1 PID: 1598 at lib/debugobjects.c:517 debug_check_no_obj_freed+0x1db/0x330
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552680] Modules linked in: ha(O) log_cfg(O) vtb(O) fs_miglog(O) miglog(O) adc_nl_ipc_k(O) bridge_mac(O) ti_bridge(O) infodmem(O)
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552693] CPU: 1 PID: 1598 Comm: fnginxctld Kdump: loaded Tainted: G           O       6.1 #71
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552697] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 12/12/2018
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552699] RIP: 0010:debug_check_no_obj_freed+0x1db/0x330
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552703] Code: 89 05 81 53 a0 01 8b 41 10 8b 49 14 48 8b 14 c5 20 37 90 81 4d 8b 07 48 c7 c7 28 16 7f 81 48 c7 c6 41 0d 80 81 e8 f5 f9 a8 ff <0f> 0b ff 05 bd 93 64 01 4c 8b 7d d0 48 8b 45 c0 4c 8b 58 30 4d 85
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552706] RSP: 0000:ffffc90002877d50 EFLAGS: 00010246
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552710] RAX: ef5fbc460b011600 RBX: ffff888100aa7600 RCX: 0000000000000027
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552712] RDX: ffffc90002877c40 RSI: 00000000ffffdfff RDI: ffff888237d1d7e8
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552714] RBP: ffffc90002877db0 R08: 0000000000001fff R09: ffffffff81c54650
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552716] R10: 0000000000005ffd R11: 0000000000000004 R12: ffff888100aa7470
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552718] R13: ffff8881034bae38 R14: ffff888100aa7400 R15: ffffffff818c76c0
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552721] FS:  00007fa68dcd9800(0000) GS:ffff888237d00000(0000) knlGS:0000000000000000
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552723] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552726] CR2: 00007fbe6d22a018 CR3: 00000001096fe000 CR4: 00000000000006e0
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552760] Call Trace:
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552762]  <TASK>
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552764]  ? __warn+0x197/0x270
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552769]  ? debug_check_no_obj_freed+0x1db/0x330
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552773]  ? report_bug+0x1af/0x240
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552778]  ? console_unlock+0x27b/0x2d0
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552782]  ? handle_bug+0x46/0x80
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552785]  ? exc_invalid_op+0x1b/0x50
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552788]  ? asm_exc_invalid_op+0x1b/0x20
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552793]  ? debug_check_no_obj_freed+0x1db/0x330
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552797]  kmem_cache_free+0x160/0x290
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552812]  ? ddos_free_rcu+0x1c/0x30
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552816]  ddos_free_rcu+0x1c/0x30
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552820]  rcu_core+0x2f3/0x900
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552825]  rcu_core_si+0xe/0x20
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552828]  __do_softirq+0x14a/0x390
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552832]  irq_exit_rcu+0x71/0xa0
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552837]  sysvec_apic_timer_interrupt+0x3d/0x90
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552841]  asm_sysvec_apic_timer_interrupt+0x1b/0x20
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552845] RIP: 0033:0x7fa68f238893
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552848] Code: 00 00 00 76 2a 48 8d 50 40 48 83 e2 f0 66 2e 0f 1f 84 00 00 00 00 00 0f 29 02 0f 29 42 10 0f 29 42 20 0f 29 42 30 48 83 ea c0 <48> 39 fa 72 e8 0f 11 07 0f 11 47 10 0f 11 47 20 0f 11 47 30 c3 0f
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552850] RSP: 002b:00007ffc6316b318 EFLAGS: 00000207
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552852] RAX: 000055d1e080ac20 RBX: 000000000000000c RCX: 000055d1e120f770
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552854] RDX: 000055d1e08be1a0 RSI: 0000000000000000 RDI: 000055d1e090abe0
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552856] RBP: 000055d1e080ac20 R08: 0000000000015890 R09: 0000000000000000
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552858] R10: 000055d1e07f5820 R11: 0000000000000202 R12: 000055d1e0809728
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552860] R13: 000055d1e080a3c0 R14: 000055d1e092944c R15: 00007ffc6326b3c0
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552862]  </TASK>
+Nov  4 13:59:19 VM kern.warn kernel: [ 1369.552863] ---[ end trace 0000000000000000 ]---
+
+```
+
+从以上Call Trace可以看到，问题timer是 dos_vs_log_expire.
+
+随后查看对应代码，梳理 dos_vs_log_expire 的相关使用逻辑，发现存在 timer还在队列中，但是相关内存结构被释放的问题。
 
 
 ## 4. 后记
 
-遇到类似问题，大多都是相关内存释放，但是没有删除timer导致的。如果能稳定复现，开启相关选项后，就能很快捕捉到问题timer了。
+遇到类似问题，大多都是相关内存释放，但是没有删除timer导致的。如果能稳定复现，开启相关选项后，就能很快捕捉到问题timer了。这极大的提高了问题定位效率。
 timer在内核中非常普及，任何内核和模块开发都会经常用到，但只有部分人能够熟练正确使用。
 
 
