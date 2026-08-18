@@ -77,9 +77,9 @@ warning: 381	conn_hash.c: No such file or directory
 
 ```
 (gdb) bt
-#0  0x00007f8ebb60da81 in _chash_init (caller=0x55e3b8241bb3 "qc_conn_table_init", bucket_size=bucket_size@entry=131071, compare=<optimized out>, max_nodes=max_nodes@entry=10000, 
-    lock_type=lock_type@entry=CHASH_FO_LOCK_TYPE) at chash.c:381
-#1  0x000055e3b8f2ea40 in qc_conn_table_init (addr_table_size=addr_table_size@entry=100000, cid_table_size=cid_table_size@entry=10000) at ./http3_quic/quic_conn.c:621
+#0  0x00007f8ebb60da81 in _conn_hash_init (caller=0x55e3b8241bb3 "qc_table_init", bucket_size=bucket_size@entry=131071, compare=<optimized out>, max_nodes=max_nodes@entry=10000, 
+    lock_type=lock_type@entry=conn_hash_FO_LOCK_TYPE) at conn_hash.c:381
+#1  0x000055e3b8f2ea40 in qc_table_init (addr_table_size=addr_table_size@entry=100000, cid_table_size=cid_table_size@entry=10000) at ./http3_quic/quic_conn.c:621
 #2  0x000055e3b85ac1f1 in _worker_init (ti=ti@entry=0x7f8eb1470560) at ./core/worker.c:1398
 #3  0x000055e3b85b025c in worker_run (arg=0x7f8eb1470560) at ./core/worker.c:2720
 #4  0x00007f8eb41364b1 in start_thread (arg=<optimized out>) at pthread_create.c:454
@@ -91,7 +91,7 @@ $1 = {si_signo = 11, si_errno = 0, si_code = 1, _sifields = {_pad = {1305972736,
       si_utime = 0, si_stime = 0}, _sigfault = {si_addr = 0x7f8e4dd79000}, _sigpoll = {si_band = 140249168056320, si_fd = 0}, _sigsys = {_call_addr = 0x7f8e4dd79000, _syscall = 0, _arch = 0}}}
 
 (gdb)   x/i $pc
-=> 0x7f8ebb60da81 <_chash_init+465>:	mov    %r14,(%r12,%rax,1)
+=> 0x7f8ebb60da81 <_conn_hash_init+465>:	mov    %r14,(%r12,%rax,1)
 (gdb)   info registers
 rax            0xf8000             1015808
 rbx            0xf800              63488
